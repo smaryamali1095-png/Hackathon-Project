@@ -1,35 +1,9 @@
 import pandas as pd
-import os
-import ssl
-from dotenv import load_dotenv
-from neo4j import GraphDatabase
-
 from connection.database import (
-    citizens_collection,
-    vehicles_collection,
-    properties_collection,
-    tax_records_collection,
-    utility_records_collection
+    get_driver, NEO4J_DB,
+    citizens_collection, vehicles_collection,
+    properties_collection, tax_records_collection, utility_records_collection
 )
-
-load_dotenv()
-
-def get_driver():
-    # Use bolt:// to permit manual SSL context handling
-    uri = os.getenv("NEO4J_URI").replace("neo4j+s://", "bolt://").replace("bolt+s://", "bolt://")
-    
-    # Create an SSL context that ignores local CA verification 
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    
-    return GraphDatabase.driver(
-        uri, 
-        auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD")),
-        ssl_context=context
-    )
-
-driver = get_driver()
 
 def load_csv(path):
     return pd.read_csv(path)
@@ -37,76 +11,71 @@ def load_csv(path):
 async def upsert_citizen(cnic, name=None):
     if not cnic: return
     await citizens_collection.update_one(
-        {"cnic": cnic},
-        {"$setOnInsert": {"cnic": cnic, "name": name}},
+        {"cnic": str(cnic)},
+        {"$setOnInsert": {"cnic": str(cnic), "name": name}},
         upsert=True
     )
 
 async def insert_vehicles(df):
+    driver = get_driver()
     for _, row in df.iterrows():
         await upsert_citizen(row["cnic"], row.get("owner_name"))
-        await vehicles_collection.update_one(
-            {"vehicle_reg_no": row["vehicle_reg_no"]},
-            {"$set": row.to_dict()},
-            upsert=True
-        )
-        # Removed database parameter to allow Aura to auto-route
-        with driver.session() as session:
+        await vehicles_collection.update_one({"vehicle_reg_no": row["vehicle_reg_no"]}, {"$set": row.to_dict()}, upsert=True)
+        with driver.session(database=NEO4J_DB) as session:
             session.run("""
                 MERGE (c:Citizen {cnic: $cnic})
                 MERGE (v:Vehicle {reg_no: $reg_no})
+                SET v.make_model = $model, v.engine_cc = $cc
                 MERGE (c)-[:OWNS]->(v)
-            """, cnic=row["cnic"], reg_no=row["vehicle_reg_no"])
+            """, cnic=str(row["cnic"]), reg_no=str(row["vehicle_reg_no"]), model=row["vehicle_make_model"], cc=row["engine_capacity_cc"])
 
 async def insert_properties(df):
+    driver = get_driver()
     for _, row in df.iterrows():
         await upsert_citizen(row["cnic"], row.get("buyer_name"))
-        await properties_collection.update_one(
-            {"registry_no": row["registry_no"]},
-            {"$set": row.to_dict()},
-            upsert=True
-        )
-        # Removed database parameter to allow Aura to auto-route
-        with driver.session() as session:
+        await properties_collection.update_one({"registry_no": row["registry_no"]}, {"$set": row.to_dict()}, upsert=True)
+        with driver.session(database=NEO4J_DB) as session:
             session.run("""
                 MERGE (c:Citizen {cnic: $cnic})
                 MERGE (p:Property {registry_no: $reg})
+                SET p.address = $addr, p.value = $val, p.type = $type
                 MERGE (c)-[:OWNS]->(p)
-            """, cnic=row["cnic"], reg=row["registry_no"])
+            """, cnic=str(row["cnic"]), reg=str(row["registry_no"]), addr=row["property_address"], val=row["property_value_pkr"], type=row["property_type"])
 
 async def insert_tax_records(df):
+    driver = get_driver()
     for _, row in df.iterrows():
         await upsert_citizen(row["cnic"], row.get("full_name"))
-        await tax_records_collection.update_one(
-            {"fbr_id": row["fbr_id"]},
-            {"$set": row.to_dict()},
-            upsert=True
-        )
+        await tax_records_collection.update_one({"fbr_id": row["fbr_id"]}, {"$set": row.to_dict()}, upsert=True)
+        with driver.session(database=NEO4J_DB) as session:
+            session.run("""
+                MERGE (c:Citizen {cnic: $cnic})
+                SET c.tax_status = $status, c.declared_income = $income
+            """, cnic=str(row["cnic"]), status=row["filter_status"], income=row["declared_income_pkr"])
 
 async def insert_utilities(df):
+    driver = get_driver()
     for _, row in df.iterrows():
         await upsert_citizen(row["cnic"], row.get("consumer_name"))
-        await utility_records_collection.update_one(
-            {"meter_ref_no": row["meter_ref_no"]},
-            {"$set": row.to_dict()},
-            upsert=True
-        )
-
+        await utility_records_collection.update_one({"meter_ref_no": row["meter_ref_no"]}, {"$set": row.to_dict()}, upsert=True)
+        with driver.session(database=NEO4J_DB) as session:
+            session.run("""
+                MERGE (c:Citizen {cnic: $cnic})
+                MERGE (u:Utility {meter_ref: $meter})
+                SET u.type = $type, u.avg_bill = $bill
+                MERGE (c)-[:USES]->(u)
+            """, cnic=str(row["cnic"]), meter=str(row["meter_ref_no"]), type=row["connection_type"], bill=row["avg_monthly_bill_pkr"])
 async def run_demo_loader():
-    try:
-        driver.verify_connectivity()
-        print("✅ Neo4j Connection Verified!")
-        
-        vehicle_df = load_csv("data/demo/excise_vehicles.csv")
-        property_df = load_csv("data/demo/property_transfers.csv")
-        tax_df = load_csv("data/demo/fbr_tax_records.csv")
-        util_df = load_csv("data/demo/disco_consumption.csv")
+    # Load the files
+    vehicle_df = load_csv("data/demo/excise_vehicles.csv")
+    property_df = load_csv("data/demo/property_transfers.csv")
+    tax_df = load_csv("data/demo/fbr_tax_records.csv")
+    util_df = load_csv("data/demo/disco_consumption.csv")
 
-        await insert_vehicles(vehicle_df)
-        await insert_properties(property_df)
-        await insert_tax_records(tax_df)
-        await insert_utilities(util_df)
+    # Execute inserts - The driver connects automatically here
+    await insert_vehicles(vehicle_df)
+    await insert_properties(property_df)
+    await insert_tax_records(tax_df)
+    await insert_utilities(util_df)
 
-        print("✅ Demo dataset loaded successfully")
-    except Exception as e:
-        print(f"❌ Critical error during data ingestion: {e}")
+    print("✅ Demo dataset loaded successfully")
