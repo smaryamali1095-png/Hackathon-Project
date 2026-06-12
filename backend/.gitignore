@@ -1,14 +1,30 @@
-# Ignore node modules (if using JavaScript)
-node_modules/
-
-# Ignore virtual environments (if using Python)
+# --- Python / Backend ---
+__pycache__/
+*.py[cod]
+*$py.class
+env/
 venv/
 .env
+.venv/
 
-# Ignore system files
-.DS_Store
-Thumbs.db
+# --- Temporary Data (Crucial for your project) ---
+# Exclude the temporary folder where you process CSVs
+temp_uploads/
 
-# Ignore IDE settings
+# Exclude any local databases or logs
+*.db
+*.sqlite3
+*.log
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+build/
+.output/
+.vite/
+
+# --- IDE / OS Specific ---
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
