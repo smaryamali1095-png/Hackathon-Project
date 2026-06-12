@@ -1,12 +1,23 @@
-from neo4j import GraphDatabase
 
-def resolve_citizen(tx, cnic, name):
-    # This logic creates a unique profile or returns the existing one
+def resolve_citizen(tx, cnic, name=None, address=None):
     query = """
     MERGE (c:Citizen {cnic: $cnic})
-    ON CREATE SET c.name = $name, c.created_at = timestamp()
-    ON MATCH SET c.last_seen = timestamp()
-    RETURN id(c) as citizen_id
+    ON CREATE SET
+        c.name = $name,
+        c.address = $address,
+        c.created_at = timestamp()
+    ON MATCH SET
+        c.last_seen = timestamp(),
+        c.latest_name = $name,
+        c.latest_address = $address
+    RETURN elementId(c) AS citizen_id
     """
-    result = tx.run(query, cnic=cnic, name=name)
+
+    result = tx.run(
+        query,
+        cnic=str(cnic),
+        name=name,
+        address=address
+    )
+
     return result.single()["citizen_id"]
