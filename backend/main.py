@@ -5,7 +5,8 @@ from routes.auth_routes import router as auth_router
 from routes.data_routes import router as data_router
 from ingestion.demo_loader import run_demo_loader
 from connection.database import check_mongo_connection
-
+from routes.entity_resolution_routes import router as entity_resolution_router
+from routes.risk_routes import router as risk_router
 app = FastAPI(title="Tax Intel AI Backend")
 
 app.add_middleware(
@@ -18,8 +19,8 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(data_router, prefix="/data", tags=["Data"])
-
-
+app.include_router(entity_resolution_router)
+app.include_router(risk_router)
 @app.get("/")
 def home():
     return {"message": "Tax Intel AI Backend Online"}

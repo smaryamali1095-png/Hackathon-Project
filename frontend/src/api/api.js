@@ -74,6 +74,15 @@ export const riskRanking = () =>
 export const graphAiAnomalies = () =>
   api.get("/data/graph-ai/anomalies");
 
+export const calculateAllRiskScores = () =>
+  api.post("/risk/calculate-all");
+
+export const calculateRiskByCnic = (cnic) =>
+  api.get(`/risk/calculate/${cnic}`);
+
+export const getSavedRiskScores = () =>
+  api.get("/risk/saved-scores");
+
 // =====================
 // SEARCH / GRAPH
 // =====================
@@ -82,6 +91,22 @@ export const searchEntity = (q) =>
 
 export const graphByCnic = (cnic) =>
   api.get(`/data/graph/${cnic}`);
+
+export const searchCitizens = (q = "") =>
+  api.get("/data/citizens/search", { params: { q } });
+
+export const knowledgeGraphByCnic = (cnic, fiscalYear = "") =>
+  api.get(`/data/knowledge-graph/${cnic}`, {
+    params: fiscalYear ? { fiscal_year: fiscalYear } : {},
+  });
+
+// =====================
+// DECLARATION GAP
+// =====================
+export const declarationGap = (cnic, fiscalYear = "All") =>
+  api.get(`/data/declaration-gap/${cnic}`, {
+    params: { fiscal_year: fiscalYear },
+  });
 
 // =====================
 // REPORTS
@@ -98,25 +123,7 @@ export const uploadData = (type, formData) =>
       "Content-Type": "multipart/form-data",
     },
   });
-export const entityResolution = (threshold = 75) =>
-  api.get("/data/entity-resolution", { params: { threshold } });
 
-export const gnnAnomalies = () =>
-  api.get("/data/gnn-anomalies");
-
-export const auditTrail = (cnic) =>
-  api.get(`/data/audit-trail/${cnic}`);
-export const searchCitizens = (q = "") =>
-  api.get("/data/citizens/search", { params: { q } });
-
-export const knowledgeGraphByCnic = (cnic, fiscalYear = "") =>
-  api.get(`/data/knowledge-graph/${cnic}`, {
-    params: fiscalYear ? { fiscal_year: fiscalYear } : {}
-  });
-export const declarationGap = (cnic, fiscalYear = "2026") =>
-  api.get(`/data/declaration-gap/${cnic}`, {
-    params: { fiscal_year: fiscalYear }
-  });
 export const uploadDataset = (datasetType, fiscalYear, file) => {
   const formData = new FormData();
   formData.append("fiscal_year", fiscalYear);
@@ -124,5 +131,34 @@ export const uploadDataset = (datasetType, fiscalYear, file) => {
 
   return uploadData(datasetType, formData);
 };
+
+// =====================
+// ENTITY RESOLUTION
+// =====================
+export const searchEntityMatches = (q = "") =>
+  api.get("/entity-resolution/matches", {
+    params: { q },
+  });
+
+export const getEntityComparison = (matchId) =>
+  api.get(`/entity-resolution/comparison/${matchId}`);
+
+export const mergeIdentities = (matchId) =>
+  api.post(`/entity-resolution/merge/${matchId}`);
+
+export const flagEntityForReview = (matchId) =>
+  api.post(`/entity-resolution/flag/${matchId}`);
+
+export const runEntityResolution = () =>
+  api.post("/entity-resolution/run");
+
+// =====================
+// GNN / AUDIT
+// =====================
+export const gnnAnomalies = () =>
+  api.get("/data/gnn-anomalies");
+
+export const auditTrail = (cnic) =>
+  api.get(`/data/audit-trail/${cnic}`);
 
 export default api;
